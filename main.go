@@ -13,7 +13,7 @@ import (
 	"syscall"
 	"time"
 )
-//lab.netflowdev1.flow.received
+//lab.netflowdev2.flow.received
 func main() {
 
 	broker := "kafka1:9092"
@@ -23,7 +23,7 @@ func main() {
 	sigchan := make(chan os.Signal, 1)
 	signal.Notify(sigchan, syscall.SIGINT, syscall.SIGTERM)
 
-	stats := getStatsClient("10.0.2.76:8125", "lab.netflowdev1.")
+	stats := getStatsClient("10.0.2.77:8125", "lab.netflowdev2.")
 
 	c, err := kafka.NewConsumer(&kafka.ConfigMap{
 		"bootstrap.servers":  broker,
@@ -42,7 +42,7 @@ func main() {
 
 	run := true
 
-	counterThreshold := 1000.0
+	counterThreshold := 10000.0
 	counter := 1
 
 	for run == true {
@@ -74,7 +74,7 @@ func main() {
 
 				if math.Mod(float64(counter), counterThreshold) == 0 {
 					counter = 1
-					fmt.Println("1000 incoming events...")
+					fmt.Println("10000 incoming events...")
 				} else {
 					counter = counter + 1
 				}
