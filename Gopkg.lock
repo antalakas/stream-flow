@@ -9,9 +9,23 @@
   revision = "460e8e43b282a1a68219df600ef63442b81faf5f"
   version = "v0.11.6"
 
+[[projects]]
+  digest = "1:0f0fbbe91d01b561ae4de2c94173315c2802f9ce1a0106794a29a78f62e1ac52"
+  name = "github.com/quipo/statsd"
+  packages = [
+    ".",
+    "event",
+  ]
+  pruneopts = "UT"
+  revision = "977fadbd5cda9975ab87279994ea2029efdbd436"
+  version = "1.4.0"
+
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  input-imports = ["github.com/confluentinc/confluent-kafka-go/kafka"]
+  input-imports = [
+    "github.com/confluentinc/confluent-kafka-go/kafka",
+    "github.com/quipo/statsd",
+  ]
   solver-name = "gps-cdcl"
   solver-version = 1

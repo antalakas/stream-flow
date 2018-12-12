@@ -4,12 +4,16 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/confluentinc/confluent-kafka-go/kafka"
+	"github.com/quipo/statsd"
 	"gitlab.crypteianetworks.prv/stream-flow/flow"
+	"log"
+	"math"
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 )
-
+//lab.netflowdev1.flow.received
 func main() {
 
 	broker := "kafka1:9092"
@@ -18,6 +22,8 @@ func main() {
 
 	sigchan := make(chan os.Signal, 1)
 	signal.Notify(sigchan, syscall.SIGINT, syscall.SIGTERM)
+
+	stats := getStatsClient("10.0.2.76:8125", "lab.netflowdev1.")
 
 	c, err := kafka.NewConsumer(&kafka.ConfigMap{
 		"bootstrap.servers":  broker,
@@ -36,6 +42,9 @@ func main() {
 
 	run := true
 
+	counterThreshold := 1000.0
+	counter := 1
+
 	for run == true {
 		select {
 		case sig := <-sigchan:
@@ -48,25 +57,30 @@ func main() {
 			}
 
 			switch e := ev.(type) {
+			case *kafka.Stats:
+				fmt.Println("==============================================")
+				fmt.Printf("\n\nStats: %v\n\n", e)
+				fmt.Println("==============================================")
+			case kafka.AssignedPartitions:
+				fmt.Fprintf(os.Stderr, "%% %v\n", e)
+				c.Assign(e.Partitions)
+			case kafka.RevokedPartitions:
+				fmt.Fprintf(os.Stderr, "%% %v\n", e)
+				c.Unassign()
+
 			case *kafka.Message:
-				//fmt.Printf("%% Message on %s:\n%s\n",
-				//	e.TopicPartition, string(e.Value))
-				if e.Headers != nil {
-					fmt.Printf("%% Headers: %v\n", e.Headers)
+
+				go analyzeEvent(c, e, stats)
+
+				if math.Mod(float64(counter), counterThreshold) == 0 {
+					counter = 1
+					fmt.Println("1000 incoming events...")
+				} else {
+					counter = counter + 1
 				}
 
-				var netflowEvent flow.NetflowEvent
-
-				messageContext := fmt.Sprintf("%s/%d/%d\t%s\t%s\n",
-					e.TopicPartition.Topic, e.TopicPartition.Partition,
-					e.TopicPartition.Offset, e.Key, e.Value)
-
-				if err := json.Unmarshal(e.Value, &netflowEvent); err != nil {
-					fmt.Println(messageContext)
-					fmt.Println(err)
-					continue
-				}
-
+			case kafka.PartitionEOF:
+				fmt.Printf("%% Reached %v\n", e)
 			case kafka.Error:
 				// Errors should generally be considered as informational, the client will try to automatically recover
 				fmt.Println(fmt.Sprintf("%% Error: %v\n", e))
@@ -78,4 +92,52 @@ func main() {
 
 	fmt.Printf("Closing consumer\n")
 	err = c.Close()
+}
+
+func getStatsClient(address string, prefix string) *statsd.StatsdBuffer {
+	statsdClient := statsd.NewStatsdClient(address, prefix)
+	err := statsdClient.CreateSocket()
+
+	if nil != err {
+		log.Println(err)
+		//os.Exit(1)
+	}
+
+	interval := time.Second * 2 // aggregate stats and flush every 2 seconds
+	stats := statsd.NewStatsdBuffer(interval, statsdClient)
+	//defer stats.Close()
+
+	return stats
+}
+
+func analyzeEvent(
+	c *kafka.Consumer,
+	m *kafka.Message,
+	stats *statsd.StatsdBuffer) {
+
+	if m.Headers != nil {
+		fmt.Printf("%% Headers: %v\n", m.Headers)
+	}
+
+	var netflowEvent flow.NetflowEvent
+
+	messageContext := fmt.Sprintf("%s/%d/%d\t%s\t%s\n",
+		m.TopicPartition.Topic, m.TopicPartition.Partition,
+		m.TopicPartition.Offset, m.Key, m.Value)
+
+	if err := json.Unmarshal(m.Value, &netflowEvent); err != nil {
+		fmt.Println(messageContext)
+		fmt.Println(err)
+		return
+	}
+
+	fmt.Println(messageContext)
+	
+	//_, err := c.CommitMessage(m)
+
+	fmt.Println("Sending statistics")
+
+	//if err == nil {
+		stats.Incr("flow.received", 1)
+	//}
 }
