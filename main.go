@@ -131,13 +131,13 @@ func analyzeEvent(
 		return
 	}
 
-	fmt.Println(messageContext)
-	
-	//_, err := c.CommitMessage(m)
+	//fmt.Println(messageContext)
 
-	fmt.Println("Sending statistics")
+	_, err := c.CommitMessage(m)
 
-	//if err == nil {
+	//fmt.Println("Sending statistics")
+
+	if err == nil {
 		stats.Incr("flow.received", 1)
-	//}
+	}
 }
